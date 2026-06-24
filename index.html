@@ -16,24 +16,24 @@
   --text: #f0ede8;
   --text2: #9a9490;
   --text3: #5a5650;
-  --accent: #c9a96e;
-  --accent2: #a07840;
-  --green: #5fad8a;
-  --red: #c96b5a;
-  --amber: #d4924a;
+  --accent: #f0bb5c;
+  --accent2: #d99a2b;
+  --green: #3ddc97;
+  --red: #ff6b6b;
+  --amber: #ffb347;
   --radius: 12px;
   --radius-sm: 8px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.6}
 :root{transition:background-color 0.4s}
-.logo-icon{display:inline-block;vertical-align:-6px;margin-right:6px;color:var(--accent);transition:color 0.4s}
+.logo-icon{display:inline-flex;align-items:center;color:var(--accent);transition:color 0.4s;flex-shrink:0}
 
 /* ── LOCK SCREEN ── */
 #lock-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;flex-direction:column}
 .lock-wrap{width:100%;max-width:380px;padding:2rem}
-.lock-logo{font-family:'DM Serif Display',serif;font-size:32px;color:var(--accent);margin-bottom:4px;letter-spacing:-0.5px}
-.lock-sub{font-size:13px;color:var(--text3);margin-bottom:2.5rem;font-weight:300}
+.lock-logo{font-family:'DM Serif Display',serif;font-size:32px;color:var(--accent);margin-bottom:4px;letter-spacing:-0.5px;display:flex;align-items:center;justify-content:center;gap:8px}
+.lock-sub{font-size:13px;color:var(--text3);margin-bottom:2.5rem;font-weight:300;text-align:center}
 .lock-label{font-size:12px;color:var(--text2);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px}
 .lock-input{width:100%;background:var(--bg3);border:0.5px solid var(--border2);border-radius:var(--radius-sm);padding:12px 14px;font-size:15px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;transition:border-color 0.2s;margin-bottom:12px}
 .lock-input:focus{border-color:var(--accent)}
@@ -48,8 +48,8 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM San
 /* ── APP SHELL ── */
 #app{display:none;min-height:100vh;flex-direction:column}
 #app.visible{display:flex}
-header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:56px;position:sticky;top:0;z-index:100}
-.header-logo{font-family:'DM Serif Display',serif;font-size:22px;color:var(--accent);letter-spacing:-0.3px;transition:color 0.4s}
+header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:flex-end;height:56px;position:sticky;top:0;z-index:100}
+.header-logo{font-family:'DM Serif Display',serif;font-size:22px;color:var(--accent);letter-spacing:-0.3px;transition:color 0.4s;display:flex;align-items:center;gap:6px;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
 .header-right{display:flex;align-items:center;gap:12px}
 .header-month{font-size:13px;color:var(--text2)}
 .logout-btn{background:none;border:0.5px solid var(--border2);border-radius:var(--radius-sm);padding:5px 12px;color:var(--text2);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.2s}
@@ -186,8 +186,9 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
 
 /* ── MOBILE ── */
 @media(max-width:480px){
-  header{height:auto;flex-wrap:wrap;padding:10px 1rem;gap:8px;row-gap:6px}
-  .header-logo{font-size:18px}
+  header{height:auto;flex-direction:column;justify-content:center;padding:10px 1rem;gap:6px}
+  .header-logo{position:static;transform:none;font-size:18px}
+  .header-right{justify-content:center;flex-wrap:wrap;width:100%}
   .header-month{display:none}
   .logout-btn{padding:4px 8px;font-size:11px}
   .verse-banner{padding:8px 1rem;flex-wrap:wrap}
@@ -219,7 +220,7 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
 <!-- ══ LOCK SCREEN ══ -->
 <div id="lock-screen">
   <div class="lock-wrap fade-in">
-    <div class="lock-logo"><svg class="logo-icon" width="26" height="26" viewBox="0 0 24 24" style="color:var(--accent)"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.14"/><circle cx="12" cy="12" r="9.3" fill="none" stroke="currentColor" stroke-width="1.3"/><text x="12" y="16.5" text-anchor="middle" font-family="'DM Serif Display',serif" font-size="11" fill="currentColor">R</text></svg>Finanse</div>
+    <div class="lock-logo"><svg class="logo-icon" width="26" height="26" viewBox="0 0 24 24" style="color:var(--accent)"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.14"/><circle cx="12" cy="12" r="9.3" fill="none" stroke="currentColor" stroke-width="1.3"/><text x="12" y="16.5" text-anchor="middle" font-family="'DM Serif Display',serif" font-size="11" fill="currentColor">R</text></svg>Finances</div>
     <div class="lock-sub">Personal finance tracker &mdash; ZAR</div>
     <div id="lock-setup" style="display:none">
       <div class="setup-title">Welcome! Set a password to protect your data.</div>
@@ -237,6 +238,7 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
       <div class="lock-err" id="login-err"></div>
       <button class="lock-btn" onclick="tryLogin()">Unlock</button>
       <div class="lock-hint" id="lock-hint-text"></div>
+      <div class="pw-change-link" onclick="forgotPassword()" style="margin-top:10px">Forgot your password?</div>
     </div>
   </div>
 </div>
@@ -244,7 +246,7 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
 <!-- ══ APP ══ -->
 <div id="app">
   <header>
-    <div class="header-logo"><svg class="logo-icon" width="20" height="20" viewBox="0 0 24 24" style="color:var(--accent)"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.14"/><circle cx="12" cy="12" r="9.3" fill="none" stroke="currentColor" stroke-width="1.3"/><text x="12" y="16.5" text-anchor="middle" font-family="'DM Serif Display',serif" font-size="11" fill="currentColor">R</text></svg>Finanse</div>
+    <div class="header-logo"><svg class="logo-icon" width="20" height="20" viewBox="0 0 24 24" style="color:var(--accent)"><circle cx="12" cy="12" r="10" fill="currentColor" opacity="0.14"/><circle cx="12" cy="12" r="9.3" fill="none" stroke="currentColor" stroke-width="1.3"/><text x="12" y="16.5" text-anchor="middle" font-family="'DM Serif Display',serif" font-size="11" fill="currentColor">R</text></svg>Finances</div>
     <div class="header-right">
       <span class="header-month" id="header-month"></span>
       <button class="logout-btn" onclick="logout()">Lock app</button>
@@ -507,6 +509,15 @@ async function initLock(){
   }
 }
 
+function forgotPassword(){
+  var ok=confirm('Resetting your password will NOT delete your transactions, budgets, goals or investments \u2014 only the password lock itself is cleared. You will be asked to set a brand new password. Continue?');
+  if(!ok)return;
+  localStorage.removeItem(AUTH_KEY);
+  document.getElementById('login-pw').value='';
+  document.getElementById('login-err').textContent='';
+  initLock();
+}
+
 async function setupPassword(){
   var p1=document.getElementById('setup-pw1').value;
   var p2=document.getElementById('setup-pw2').value;
@@ -600,9 +611,9 @@ function updateHeaderMonth(){
 
 // ── THEMES (random on each login) ──
 var THEMES=[
-  {name:'Gold Dusk',accent:'#c9a96e',accent2:'#a07840'},
-  {name:'Sage Night',accent:'#6fae8f',accent2:'#3f7a5c'},
-  {name:'Rosewood',accent:'#c97d7d',accent2:'#9c4f4f'}
+  {name:'Gold Dusk',accent:'#f0bb5c',accent2:'#d99a2b'},
+  {name:'Sage Night',accent:'#3ddc97',accent2:'#1fae74'},
+  {name:'Rosewood',accent:'#ff7a8a',accent2:'#e0445c'}
 ];
 function applyTheme(idx){
   var t=THEMES[idx%THEMES.length];
@@ -655,7 +666,7 @@ function showVerse(){
 
 // ── CHART HELPERS ──
 var chartRegistry={};
-var CHART_COLORS=['#c9a96e','#5fad8a','#c96b5a','#d4924a','#7e9bc9','#a87ec9','#5a5650'];
+var CHART_COLORS=['#f0bb5c','#3ddc97','#ff6b6b','#ffb347','#6fb1ff','#c792ea','#9aa0a6'];
 if(typeof Chart!=='undefined'){
   Chart.defaults.color='#9a9490';
   Chart.defaults.borderColor='rgba(255,255,255,0.08)';
@@ -1079,7 +1090,7 @@ function onBackupFileSelect(e){
       saveData();renderAll();
       showBackupStatus('ok','Backup restored successfully.');
     }catch(err){
-      showBackupStatus('err','Could not read this file. Make sure it is a Finanse backup .json file.');
+      showBackupStatus('err','Could not read this file. Make sure it is a Finances backup .json file.');
     }
     document.getElementById('backup-file-input').value='';
   };
