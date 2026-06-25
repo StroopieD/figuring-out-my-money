@@ -311,10 +311,14 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
       <div class="section">
         <div class="section-title" style="margin-bottom:1rem">Set monthly budget limits</div>
         <div class="form-row fr-3">
-          <select class="field" id="bud-cat"><option value="">Category</option><option>Housing</option><option>Groceries</option><option>Transport</option><option>Utilities</option><option>Entertainment</option><option>Healthcare</option><option>Clothing</option><option>Eating out</option><option>Education</option><option>Other</option></select>
+          <select class="field" id="bud-cat" onchange="onBudCatChange()"><option value="">Category</option><option>Housing</option><option>Groceries</option><option>Transport</option><option>Utilities</option><option>Entertainment</option><option>Healthcare</option><option>Clothing</option><option>Eating out</option><option>Education</option><option>Other</option></select>
           <input class="field" type="number" id="bud-amount" placeholder="Monthly limit (R)" min="0" />
           <button class="btn btn-accent" onclick="addBudget()">Set limit</button>
         </div>
+        <div id="bud-other-wrap" style="display:none;margin-top:8px">
+          <input class="field" type="text" id="bud-other-name" placeholder="Custom category name (e.g. Pet supplies)">
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-top:8px">Tip: you can add the same category more than once (e.g. two separate Healthcare limits) &mdash; each one shows up as its own row below.</div>
       </div>
       <div class="section">
         <div class="section-head">
@@ -475,20 +479,29 @@ async function sha256(msg){
 }
 
 // ── STATE ──
-var S={transactions:[],budgets:{},goals:[],investments:[]};
+var S={transactions:[],budgets:[],goals:[],investments:[],customCategories:[]};
 var impRows=[],impHeaders=[];
 var STORE_KEY='finanse_data_v1';
 var AUTH_KEY='finanse_auth_v1';
 
+function migrateBudgets(b){
+  if(!b)return[];
+  if(Array.isArray(b))return b;
+  // old format: {category: limit} -> convert to list so duplicates become possible
+  var arr=[];
+  Object.keys(b).forEach(function(c){arr.push({id:'b'+Date.now()+Math.random(),category:c,limit:b[c]});});
+  return arr;
+}
 function loadData(){
   try{
     var s=localStorage.getItem(STORE_KEY);
     if(s)S=JSON.parse(s);
   }catch(e){}
   if(!S.transactions)S.transactions=[];
-  if(!S.budgets)S.budgets={};
   if(!S.goals)S.goals=[];
   if(!S.investments)S.investments=[];
+  if(!S.customCategories)S.customCategories=[];
+  S.budgets=migrateBudgets(S.budgets);
 }
 function saveData(){try{localStorage.setItem(STORE_KEY,JSON.stringify(S));}catch(e){}}
 
@@ -729,12 +742,12 @@ function renderTransactions(){
 function renderBudget(){
   var m=document.getElementById('bud-month').value;
   var actual={};txForMonth(m).filter(function(t){return t.type==='expense';}).forEach(function(t){actual[t.category]=(actual[t.category]||0)+t.amount;});
-  var cats=Object.keys(S.budgets);var el=document.getElementById('budget-bars');
-  if(!cats.length){el.innerHTML='<div class="empty">No budget limits set yet</div>';return;}
-  el.innerHTML=cats.map(function(c){
-    var lim=S.budgets[c];var sp=actual[c]||0;var p=Math.min(Math.round(sp/lim*100),100);
+  var el=document.getElementById('budget-bars');
+  if(!S.budgets.length){el.innerHTML='<div class="empty">No budget limits set yet</div>';return;}
+  el.innerHTML=S.budgets.map(function(b){
+    var lim=b.limit;var sp=actual[b.category]||0;var p=Math.min(Math.round(sp/lim*100),100);
     var over=sp>lim;var col=over?'var(--red)':p>75?'var(--amber)':'var(--green)';
-    return'<div class="budget-item"><div class="budget-row"><span>'+c+'</span><div style="display:flex;gap:10px;align-items:center"><button class="btn btn-ghost btn-sm" onclick="deleteBudget(\''+c+'\')">Remove</button><span style="font-weight:500;color:'+col+'">'+fmt(sp)+' / '+fmt(lim)+'</span></div></div><div class="bar-bg"><div class="bar-fill" style="width:'+p+'%;background:'+col+'"></div></div><div class="bar-sub">'+(over?'Over budget by '+fmt(sp-lim):fmt(lim-sp)+' remaining')+'</div></div>';
+    return'<div class="budget-item"><div class="budget-row"><span>'+b.category+'</span><div style="display:flex;gap:10px;align-items:center"><button class="btn btn-ghost btn-sm" onclick="deleteBudget(\''+b.id+'\')">Remove</button><span style="font-weight:500;color:'+col+'">'+fmt(sp)+' / '+fmt(lim)+'</span></div></div><div class="bar-bg"><div class="bar-fill" style="width:'+p+'%;background:'+col+'"></div></div><div class="bar-sub">'+(over?'Over budget by '+fmt(sp-lim):fmt(lim-sp)+' remaining')+'</div></div>';
   }).join('');
 }
 
@@ -840,7 +853,7 @@ function renderTrends(){
   });
 }
 
-function renderAll(){populateMonths();renderOverview();renderTransactions();renderBudget();renderGoals();renderInvestments();}
+function renderAll(){refreshCategoryDropdowns();populateMonths();renderOverview();renderTransactions();renderBudget();renderGoals();renderInvestments();}
 
 // ── ACTIONS: transactions / budget / goals (unchanged) ──
 function addTx(){
@@ -855,12 +868,69 @@ function addTx(){
   saveData();document.getElementById('tx-desc').value='';document.getElementById('tx-amount').value='';document.getElementById('tx-cat').value='';renderAll();
 }
 function deleteTx(id){if(!confirm('Delete this transaction?'))return;S.transactions=S.transactions.filter(function(t){return t.id!==id;});saveData();renderAll();}
-function addBudget(){
-  var cat=document.getElementById('bud-cat').value;var amount=parseFloat(document.getElementById('bud-amount').value);
-  if(!cat||!amount||amount<=0){alert('Please select a category and enter a limit.');return;}
-  S.budgets[cat]=amount;saveData();document.getElementById('bud-amount').value='';document.getElementById('bud-cat').value='';renderAll();
+function onBudCatChange(){
+  var v=document.getElementById('bud-cat').value;
+  var wrap=document.getElementById('bud-other-wrap');
+  if(wrap)wrap.style.display=(v==='Other')?'block':'none';
 }
-function deleteBudget(cat){if(!confirm('Remove budget for '+cat+'?'))return;delete S.budgets[cat];saveData();renderAll();}
+function addCustomCategory(name){
+  if(!S.customCategories)S.customCategories=[];
+  if(S.customCategories.indexOf(name)===-1){
+    S.customCategories.push(name);
+    saveData();
+    refreshCategoryDropdowns();
+  }
+}
+var BASE_TX_CATS=['Housing','Groceries','Transport','Utilities','Entertainment','Healthcare','Clothing','Eating out','Education','Savings','Income'];
+var BASE_BUD_CATS=['Housing','Groceries','Transport','Utilities','Entertainment','Healthcare','Clothing','Eating out','Education'];
+var BASE_IMP_CATS=['Groceries','Transport','Utilities','Entertainment','Healthcare','Clothing','Eating out','Education','Housing'];
+function buildCatOptions(base,placeholder){
+  var html=placeholder?'<option value="">'+placeholder+'</option>':'';
+  base.forEach(function(c){html+='<option>'+c+'</option>';});
+  (S.customCategories||[]).forEach(function(c){html+='<option>'+c+'</option>';});
+  html+='<option>Other</option>';
+  return html;
+}
+function refreshCategoryDropdowns(){
+  var tx=document.getElementById('tx-cat');
+  if(tx){var prev=tx.value;tx.innerHTML=buildCatOptions(BASE_TX_CATS,'Category');if(prev)tx.value=prev;}
+  var bud=document.getElementById('bud-cat');
+  if(bud){var prevB=bud.value;bud.innerHTML=buildCatOptions(BASE_BUD_CATS,'Category');if(prevB)bud.value=prevB;}
+  var imp=document.getElementById('imp-default-cat');
+  if(imp){
+    var prevI=imp.value;
+    var html='<option>Other</option>';
+    BASE_IMP_CATS.forEach(function(c){html+='<option>'+c+'</option>';});
+    (S.customCategories||[]).forEach(function(c){html+='<option>'+c+'</option>';});
+    imp.innerHTML=html;
+    if(prevI)imp.value=prevI;
+  }
+}
+function addBudget(){
+  var cat=document.getElementById('bud-cat').value;
+  var amount=parseFloat(document.getElementById('bud-amount').value);
+  if(!cat||!amount||amount<=0){alert('Please select a category and enter a limit.');return;}
+  if(cat==='Other'){
+    var custom=document.getElementById('bud-other-name').value.trim();
+    if(!custom){alert('Please type a custom category name, or pick an existing category.');return;}
+    cat=custom;
+    addCustomCategory(custom);
+  }
+  S.budgets.push({id:'b'+Date.now()+Math.random(),category:cat,limit:amount});
+  saveData();
+  document.getElementById('bud-amount').value='';
+  document.getElementById('bud-cat').value='';
+  document.getElementById('bud-other-name').value='';
+  document.getElementById('bud-other-wrap').style.display='none';
+  renderAll();
+}
+function deleteBudget(id){
+  var entry=S.budgets.find(function(b){return b.id===id;});
+  if(!entry)return;
+  if(!confirm('Remove this '+entry.category+' budget limit?'))return;
+  S.budgets=S.budgets.filter(function(b){return b.id!==id;});
+  saveData();renderAll();
+}
 function addGoal(){
   var name=document.getElementById('goal-name').value.trim();var target=parseFloat(document.getElementById('goal-target').value);
   if(!name||!target||target<=0){alert('Please enter a name and target amount.');return;}
@@ -1046,7 +1116,7 @@ function exportTransactionsCSV(){
 }
 function exportBudgetsCSV(){
   var rows=[['Category','Monthly Limit (R)']];
-  Object.keys(S.budgets).forEach(function(c){rows.push([c,S.budgets[c]]);});
+  S.budgets.forEach(function(b){rows.push([b.category,b.limit]);});
   downloadCSV('finanse-budgets.csv',rows);
 }
 function exportGoalsCSV(){
@@ -1083,9 +1153,10 @@ function onBackupFileSelect(e){
       }
       S={
         transactions:parsed.transactions||[],
-        budgets:parsed.budgets||{},
+        budgets:migrateBudgets(parsed.budgets),
         goals:parsed.goals||[],
-        investments:parsed.investments||[]
+        investments:parsed.investments||[],
+        customCategories:parsed.customCategories||[]
       };
       saveData();renderAll();
       showBackupStatus('ok','Backup restored successfully.');
