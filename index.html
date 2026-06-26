@@ -257,17 +257,28 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
   <div class="verse-banner" id="verse-banner"></div>
 
   <div class="nav-bar">
-    <button class="nav-btn active" onclick="switchTab('overview',this)">Overview</button>
-    <button class="nav-btn" onclick="switchTab('transactions',this)">Transactions</button>
-    <button class="nav-btn" onclick="switchTab('budget',this)">Budget</button>
-    <button class="nav-btn" onclick="switchTab('goals',this)">Savings goals</button>
-    <button class="nav-btn" onclick="switchTab('investments',this)">Investments</button>
-    <button class="nav-btn" onclick="switchTab('trends',this)">Trends</button>
-    <button class="nav-btn" onclick="switchTab('import',this)">Import statement</button>
-    <button class="nav-btn" onclick="switchTab('backup',this)">Export &amp; backup</button>
+    <button class="nav-btn active" data-tab="overview" onclick="switchTab('overview',this)">Overview</button>
+    <button class="nav-btn" data-tab="transactions" onclick="switchTab('transactions',this)">Transactions</button>
+    <button class="nav-btn" data-tab="budget" onclick="switchTab('budget',this)">Budget</button>
+    <button class="nav-btn" data-tab="goals" onclick="switchTab('goals',this)">Savings goals</button>
+    <button class="nav-btn" data-tab="investments" onclick="switchTab('investments',this)">Investments</button>
+    <button class="nav-btn" data-tab="trends" onclick="switchTab('trends',this)">Trends</button>
+    <button class="nav-btn" data-tab="import" onclick="switchTab('import',this)">Import statement</button>
+    <button class="nav-btn" data-tab="backup" onclick="switchTab('backup',this)">Export &amp; backup</button>
   </div>
 
   <div class="content">
+
+    <div class="section" id="quick-add-section">
+      <div class="section-title" style="margin-bottom:1rem">Quick add (smart text)</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Type a sentence and I'll try to fill in the details &mdash; works for transactions, budgets, goals and investments. You'll always get a chance to check it before anything is added.</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="field" type="text" id="qa-input" placeholder='e.g. "Spent R450 on groceries today"' style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')runQuickAdd()">
+        <button class="btn btn-accent" onclick="runQuickAdd()">Parse</button>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">Try: "R450 groceries today" &middot; "Set housing budget to R5500" &middot; "New goal Cape Town holiday target R10000" &middot; "Contribute R1000 to Sygnia unit trust" &middot; "Update Bitcoin value to R8500"</div>
+      <div id="qa-preview" style="display:none;margin-top:14px"></div>
+    </div>
 
     <!-- OVERVIEW -->
     <div class="tab active" id="tab-overview">
@@ -278,6 +289,12 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
         <div class="metric"><div class="metric-label">Net balance</div><div class="metric-value" id="ov-balance">R 0</div></div>
       </div>
       <div class="section"><div class="section-title" style="margin-bottom:1rem">Spending by category</div><div id="ov-cats"><div class="empty">No expenses yet</div></div></div>
+      <div class="section">
+        <div class="section-title" style="margin-bottom:1rem">Budget vs spending</div>
+        <div id="ov-budget-chart-wrap" class="chart-wrap" style="display:none"><canvas id="chart-ov-budget"></canvas></div>
+        <div id="ov-budget-empty" class="empty">Set a budget limit to see this chart</div>
+        <div id="ov-budget-totals" style="display:none"></div>
+      </div>
       <div class="section"><div class="section-title" style="margin-bottom:1rem">Recent transactions</div><ul class="tx-list" id="ov-recent"></ul></div>
     </div>
 
@@ -303,6 +320,7 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
           <div class="mf" style="margin-bottom:0"><label>Month:</label><select id="tx-month" onchange="renderTransactions()"></select></div>
         </div>
         <ul class="tx-list" id="tx-list-el"></ul>
+        <div id="tx-budget-totals" style="display:none;margin-top:14px;padding-top:14px;border-top:0.5px solid var(--border)"></div>
       </div>
     </div>
 
@@ -326,6 +344,7 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
           <div class="mf" style="margin-bottom:0"><label>Month:</label><select id="bud-month" onchange="renderBudget()"></select></div>
         </div>
         <div id="budget-bars"><div class="empty">No budget limits set yet</div></div>
+        <div id="budget-totals" style="display:none;margin-top:14px;padding-top:14px;border-top:0.5px solid var(--border)"></div>
       </div>
     </div>
 
@@ -622,6 +641,249 @@ function updateHeaderMonth(){
   var now=new Date();document.getElementById('header-month').textContent=now.toLocaleString('en-ZA',{month:'long',year:'numeric'});
 }
 
+// ══ QUICK ADD (rule-based text parser — no AI, fully offline) ══
+var qaParsed=null;
+
+function extractDateAndStrip(text){
+  var date=todayStr();var stripped=text;var lower=text.toLowerCase();
+  if(lower.indexOf('yesterday')!==-1){
+    var d=new Date();d.setDate(d.getDate()-1);date=d.toISOString().split('T')[0];
+    stripped=stripped.replace(/yesterday/i,'');
+  }else if(lower.indexOf('today')!==-1){
+    stripped=stripped.replace(/today/i,'');
+  }else{
+    var m=text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m){date=m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');stripped=stripped.replace(m[0],'');}
+    else{
+      m=text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if(m){date=m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');stripped=stripped.replace(m[0],'');}
+      else{
+        m=text.match(/(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})?/i);
+        if(m){
+          var months={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+          var yr=m[3]||String(new Date().getFullYear());
+          date=yr+'-'+months[m[2].toLowerCase().substring(0,3)]+'-'+String(m[1]).padStart(2,'0');
+          stripped=stripped.replace(m[0],'');
+        }
+      }
+    }
+  }
+  return {date:date,stripped:stripped};
+}
+function extractAmount(text){
+  var m=text.match(/R\s?\d[\d,. ]*\d|R\s?\d+|\d[\d,. ]*\d|\d+(?:\.\d+)?/);
+  if(!m)return null;
+  var val=parseAmount(m[0]);
+  return val>0?val:null;
+}
+function matchCategory(text){
+  var lower=text.toLowerCase();
+  var all=BASE_TX_CATS.concat(S.customCategories||[]).slice().sort(function(a,b){return b.length-a.length;});
+  for(var i=0;i<all.length;i++){if(lower.indexOf(all[i].toLowerCase())!==-1)return all[i];}
+  return null;
+}
+function matchGoalByText(text){
+  var lower=text.toLowerCase();
+  for(var i=0;i<S.goals.length;i++){if(S.goals[i].name&&lower.indexOf(S.goals[i].name.toLowerCase())!==-1)return S.goals[i];}
+  return null;
+}
+function matchInvestmentByText(text){
+  var lower=text.toLowerCase();
+  for(var i=0;i<S.investments.length;i++){if(S.investments[i].name&&lower.indexOf(S.investments[i].name.toLowerCase())!==-1)return S.investments[i];}
+  return null;
+}
+function escapeAttr(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function parseQuickAdd(raw){
+  var text=(raw||'').trim();
+  if(!text)return null;
+  var dateInfo=extractDateAndStrip(text);
+  var working=dateInfo.stripped;
+  var lower=working.toLowerCase();
+  var amount=extractAmount(working);
+  var amtMatch=working.match(/R\s?\d[\d,. ]*\d|R\s?\d+|\d[\d,. ]*\d|\d+(?:\.\d+)?/);
+  var nameSource=amtMatch?working.replace(amtMatch[0],''):working;
+
+  // existing investment mentioned -> contribution or value update
+  var inv=matchInvestmentByText(working);
+  if(inv){
+    var isValueUpdate=/worth|value|now at|currently|valued/.test(lower);
+    return {kind:'investment',mode:isValueUpdate?'value':'contribution',investmentId:inv.id,investmentName:inv.name,amount:amount,date:dateInfo.date};
+  }
+  // new investment
+  if(/new investment|add investment|create investment|open investment/.test(lower)){
+    var typeGuess='Cash/Other';
+    if(/crypto|bitcoin|ethereum/.test(lower))typeGuess='Crypto';
+    else if(/unit trust/.test(lower))typeGuess='Unit Trust';
+    else if(/retirement annuity|\bra\b/.test(lower))typeGuess='Retirement Annuity';
+    else if(/etf|stock|share/.test(lower))typeGuess='Stocks/ETF';
+    var nm=nameSource.replace(/new investment|add investment|create investment|open investment/i,'').replace(/type\s+\w+.*/i,'').trim();
+    return {kind:'investment',mode:'new',name:nm||'New holding',type:typeGuess,amount:amount,date:dateInfo.date};
+  }
+  // existing goal mentioned -> contribution
+  var goal=matchGoalByText(working);
+  if(goal&&amount){
+    return {kind:'goal',mode:'contribution',goalId:goal.id,goalName:goal.name,amount:amount};
+  }
+  // new goal
+  if(/new goal|create goal|add goal|savings goal/.test(lower)){
+    var gn=nameSource.replace(/new goal|create goal|add goal|savings goal|target|goal/gi,'').trim();
+    return {kind:'goal',mode:'new',name:gn||'New goal',target:amount};
+  }
+  // budget
+  if(/budget|monthly limit|spending limit/.test(lower)){
+    var cat=matchCategory(working);
+    return {kind:'budget',category:cat,limit:amount};
+  }
+  // default: transaction
+  var incomeRegex=/salary|income|received|deposit|refund|earned|bonus|got paid|payment received/;
+  var type=incomeRegex.test(lower)?'income':'expense';
+  var category=type==='income'?'Income':(matchCategory(working)||'Other');
+  return {kind:'transaction',type:type,category:category,amount:amount,date:dateInfo.date,description:text};
+}
+
+function runQuickAdd(){
+  var raw=document.getElementById('qa-input').value;
+  var parsed=parseQuickAdd(raw);
+  if(!parsed)return;
+  qaParsed=parsed;
+  renderQuickAddPreview(parsed);
+}
+function cancelQuickAdd(){
+  var el=document.getElementById('qa-preview');
+  el.style.display='none';el.innerHTML='';
+  qaParsed=null;
+}
+function renderQuickAddPreview(parsed){
+  var el=document.getElementById('qa-preview');
+  var html='<div class="status-msg status-info" style="margin-bottom:10px">Here\u2019s what I understood &mdash; check and adjust before adding.</div>';
+  if(parsed.kind==='transaction'){
+    html+='<div class="form-row fr-3">'
+      +'<select class="field" id="qa-f-type"><option value="expense"'+(parsed.type==='expense'?' selected':'')+'>Expense</option><option value="income"'+(parsed.type==='income'?' selected':'')+'>Income</option></select>'
+      +'<input class="field" type="number" id="qa-f-amount" placeholder="Amount (R)" value="'+(parsed.amount||'')+'">'
+      +'<input class="field" type="date" id="qa-f-date" value="'+parsed.date+'">'
+    +'</div>'
+    +'<div class="form-row fr-2" style="margin-top:8px">'
+      +'<select class="field" id="qa-f-cat">'+buildCatOptions(BASE_TX_CATS,'')+'</select>'
+      +'<input class="field" type="text" id="qa-f-desc" placeholder="Description" value="'+escapeAttr(parsed.description)+'">'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Add transaction</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
+    el.style.display='block';el.innerHTML=html;
+    if(parsed.category)document.getElementById('qa-f-cat').value=parsed.category;
+  }else if(parsed.kind==='budget'){
+    html+='<div class="form-row fr-2">'
+      +'<select class="field" id="qa-f-bcat">'+buildCatOptions(BASE_BUD_CATS,'Category')+'</select>'
+      +'<input class="field" type="number" id="qa-f-blimit" placeholder="Monthly limit (R)" value="'+(parsed.limit||'')+'">'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Set budget limit</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
+    el.style.display='block';el.innerHTML=html;
+    if(parsed.category)document.getElementById('qa-f-bcat').value=parsed.category;
+  }else if(parsed.kind==='goal'){
+    if(parsed.mode==='contribution'){
+      html+='<div style="font-size:14px;margin-bottom:8px">Add savings to goal: <b>'+escapeAttr(parsed.goalName)+'</b></div>'
+        +'<div class="form-row fr-2"><input class="field" type="number" id="qa-f-gamount" placeholder="Amount (R)" value="'+(parsed.amount||'')+'"><span></span></div>'
+        +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Add savings</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
+    }else{
+      html+='<div class="form-row fr-2">'
+        +'<input class="field" type="text" id="qa-f-gname" placeholder="Goal name" value="'+escapeAttr(parsed.name)+'">'
+        +'<input class="field" type="number" id="qa-f-gtarget" placeholder="Target amount (R)" value="'+(parsed.target||'')+'">'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Create goal</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
+    }
+    el.style.display='block';el.innerHTML=html;
+  }else if(parsed.kind==='investment'){
+    if(parsed.mode==='new'){
+      html+='<div class="form-row fr-3">'
+        +'<input class="field" type="text" id="qa-f-iname" placeholder="Holding name" value="'+escapeAttr(parsed.name)+'">'
+        +'<select class="field" id="qa-f-itype"><option>Unit Trust</option><option>Retirement Annuity</option><option>Crypto</option><option>Stocks/ETF</option><option>Cash/Other</option></select>'
+        +'<input class="field" type="number" id="qa-f-iamount" placeholder="Starting amount (R, optional)" value="'+(parsed.amount||'')+'">'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Create holding</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
+      el.style.display='block';el.innerHTML=html;
+      document.getElementById('qa-f-itype').value=parsed.type||'Cash/Other';
+    }else{
+      var label=parsed.mode==='value'?'Update current value of':'Add contribution to';
+      html+='<div style="font-size:14px;margin-bottom:8px">'+label+': <b>'+escapeAttr(parsed.investmentName)+'</b></div>'
+        +'<div class="form-row fr-2">'
+          +'<input class="field" type="number" id="qa-f-ivamount" placeholder="'+(parsed.mode==='value'?'New current value (R)':'Contribution amount (R)')+'" value="'+(parsed.amount||'')+'">'
+          +'<input class="field" type="date" id="qa-f-ivdate" value="'+(parsed.date||todayStr())+'">'
+        +'</div>'
+        +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">'+(parsed.mode==='value'?'Update value':'Log contribution')+'</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
+      el.style.display='block';el.innerHTML=html;
+    }
+  }
+}
+function confirmQuickAdd(){
+  if(!qaParsed)return;
+  var k=qaParsed.kind;
+  if(k==='transaction'){
+    var type=document.getElementById('qa-f-type').value;
+    var amount=parseFloat(document.getElementById('qa-f-amount').value);
+    var cat=document.getElementById('qa-f-cat').value;
+    var date=document.getElementById('qa-f-date').value;
+    var desc=document.getElementById('qa-f-desc').value.trim()||'Quick add';
+    if(!amount||amount<=0||!date){alert('Please check the amount and date.');return;}
+    if(type==='income')cat='Income';
+    S.transactions.push({id:Date.now().toString(),description:desc,amount:amount,category:cat,date:date,type:type});
+    saveData();finishQuickAdd('Transaction added.');
+  }else if(k==='budget'){
+    var bcat=document.getElementById('qa-f-bcat').value;
+    var blimit=parseFloat(document.getElementById('qa-f-blimit').value);
+    if(!bcat||!blimit||blimit<=0){alert('Please check the category and limit.');return;}
+    S.budgets.push({id:'b'+Date.now()+Math.random(),category:bcat,limit:blimit});
+    saveData();finishQuickAdd('Budget limit set.');
+  }else if(k==='goal'){
+    if(qaParsed.mode==='contribution'){
+      var gamount=parseFloat(document.getElementById('qa-f-gamount').value);
+      if(!gamount||gamount<=0){alert('Please enter a valid amount.');return;}
+      S.goals.forEach(function(g){if(g.id===qaParsed.goalId)g.saved=Math.min(g.saved+gamount,g.target);});
+      saveData();finishQuickAdd('Added to goal.');
+    }else{
+      var gname=document.getElementById('qa-f-gname').value.trim();
+      var gtarget=parseFloat(document.getElementById('qa-f-gtarget').value);
+      if(!gname||!gtarget||gtarget<=0){alert('Please enter a goal name and target.');return;}
+      S.goals.push({id:Date.now().toString(),name:gname,target:gtarget,saved:0});
+      saveData();finishQuickAdd('Goal created.');
+    }
+  }else if(k==='investment'){
+    if(qaParsed.mode==='new'){
+      var iname=document.getElementById('qa-f-iname').value.trim();
+      var itype=document.getElementById('qa-f-itype').value;
+      var iamount=parseFloat(document.getElementById('qa-f-iamount').value)||0;
+      if(!iname){alert('Please enter a holding name.');return;}
+      var newInv={id:Date.now().toString(),name:iname,type:itype,totalInvested:0,currentValue:0,history:[]};
+      if(iamount>0){newInv.totalInvested=iamount;newInv.currentValue=iamount;newInv.history.push({date:todayStr(),value:iamount});}
+      S.investments.push(newInv);
+      saveData();finishQuickAdd('Investment holding created.');
+    }else{
+      var ivamount=parseFloat(document.getElementById('qa-f-ivamount').value);
+      var ivdate=document.getElementById('qa-f-ivdate').value;
+      if(isNaN(ivamount)||!ivdate){alert('Please check the amount and date.');return;}
+      S.investments.forEach(function(inv){
+        if(inv.id===qaParsed.investmentId){
+          if(qaParsed.mode==='value'){inv.currentValue=ivamount;}
+          else{inv.totalInvested+=ivamount;inv.currentValue+=ivamount;}
+          inv.history.push({date:ivdate,value:inv.currentValue});
+          inv.history.sort(function(a,b){return a.date.localeCompare(b.date);});
+        }
+      });
+      saveData();finishQuickAdd(qaParsed.mode==='value'?'Investment value updated.':'Contribution logged.');
+    }
+  }
+}
+function finishQuickAdd(msg){
+  document.getElementById('qa-input').value='';
+  cancelQuickAdd();
+  renderAll();
+  var box=document.getElementById('quick-add-section');
+  var note=document.createElement('div');
+  note.className='status-msg status-ok';
+  note.style.marginTop='10px';
+  note.textContent=msg;
+  box.appendChild(note);
+  setTimeout(function(){if(note.parentNode)note.parentNode.removeChild(note);},3500);
+}
+
 // ── THEMES (random on each login) ──
 var THEMES=[
   {name:'Gold Dusk',accent:'#f0bb5c',accent2:'#d99a2b'},
@@ -713,6 +975,26 @@ function miniChartOptions(){
 }
 
 // ── RENDER ──
+function getBudgetTotalsForMonth(m){
+  var actual={};
+  txForMonth(m).filter(function(t){return t.type==='expense';}).forEach(function(t){actual[t.category]=(actual[t.category]||0)+t.amount;});
+  var limitByCat={};
+  S.budgets.forEach(function(b){limitByCat[b.category]=(limitByCat[b.category]||0)+b.limit;});
+  var cats=Object.keys(limitByCat);
+  var totalLimit=0;S.budgets.forEach(function(b){totalLimit+=b.limit;});
+  var totalSpent=0;cats.forEach(function(c){totalSpent+=actual[c]||0;});
+  return {actual:actual,limitByCat:limitByCat,cats:cats,totalLimit:totalLimit,totalSpent:totalSpent};
+}
+function budgetTotalsHTML(totals,label){
+  var remaining=totals.totalLimit-totals.totalSpent;
+  var over=remaining<0;
+  var p=totals.totalLimit>0?Math.min(Math.round(totals.totalSpent/totals.totalLimit*100),100):0;
+  var col=over?'var(--red)':p>75?'var(--amber)':'var(--green)';
+  return '<div class="budget-row" style="margin-bottom:5px"><span style="font-weight:500">'+(label||'Total budget')+'</span><span style="font-weight:500;color:'+col+'">'+fmt(totals.totalSpent)+' / '+fmt(totals.totalLimit)+'</span></div>'
+    +'<div class="bar-bg"><div class="bar-fill" style="width:'+p+'%;background:'+col+'"></div></div>'
+    +'<div class="bar-sub">'+(over?'Over your total budget by '+fmt(-remaining):fmt(remaining)+' remaining overall')+'</div>';
+}
+
 function renderOverview(){
   var m=document.getElementById('ov-month').value;var txs=txForMonth(m);
   var inc=0,exp=0;txs.forEach(function(t){if(t.type==='income')inc+=t.amount;else exp+=t.amount;});
@@ -727,28 +1009,58 @@ function renderOverview(){
   else{var mx=cats[ks[0]];cEl.innerHTML=ks.map(function(c){var p=Math.round(cats[c]/mx*100);var ot=exp>0?Math.round(cats[c]/exp*100):0;return'<div class="budget-item"><div class="budget-row"><span>'+c+'</span><span style="font-weight:500">'+fmt(cats[c])+'</span></div><div class="bar-bg"><div class="bar-fill" style="width:'+p+'%;background:var(--accent)"></div></div><div class="bar-sub">'+ot+'% of total spending</div></div>';}).join('');}
   var rec=txs.slice().sort(function(a,b){return b.date.localeCompare(a.date);}).slice(0,7);
   var rEl=document.getElementById('ov-recent');
-  if(!rec.length){rEl.innerHTML='<div class="empty">No transactions this month</div>';return;}
-  rEl.innerHTML=rec.map(function(t){return'<li class="tx-item"><span class="tx-dot '+t.type+'"></span><span class="tx-cat">'+t.category+'</span><span class="tx-desc">'+t.description+(t.imported?'<span class="tag-imported">imported</span>':'')+'</span><span class="tx-date">'+t.date+'</span><span class="tx-amount '+t.type+'">'+(t.type==='income'?'+':'-')+fmt(t.amount)+'</span></li>';}).join('');
+  if(!rec.length){rEl.innerHTML='<div class="empty">No transactions this month</div>';}
+  else{rEl.innerHTML=rec.map(function(t){return'<li class="tx-item"><span class="tx-dot '+t.type+'"></span><span class="tx-cat">'+t.category+'</span><span class="tx-desc">'+t.description+(t.imported?'<span class="tag-imported">imported</span>':'')+'</span><span class="tx-date">'+t.date+'</span><span class="tx-amount '+t.type+'">'+(t.type==='income'?'+':'-')+fmt(t.amount)+'</span></li>';}).join('');}
+
+  var budTotals=getBudgetTotalsForMonth(m);
+  var chartWrap=document.getElementById('ov-budget-chart-wrap');
+  var emptyEl=document.getElementById('ov-budget-empty');
+  var totEl=document.getElementById('ov-budget-totals');
+  if(!budTotals.cats.length){
+    chartWrap.style.display='none';totEl.style.display='none';emptyEl.style.display='block';
+  }else{
+    emptyEl.style.display='none';chartWrap.style.display='block';totEl.style.display='block';
+    var cats=budTotals.cats;
+    makeChart('chart-ov-budget',{
+      type:'bar',
+      data:{labels:cats,datasets:[
+        {label:'Budgeted',data:cats.map(function(c){return budTotals.limitByCat[c];}),backgroundColor:'#9aa0a6',borderRadius:4},
+        {label:'Spent',data:cats.map(function(c){return budTotals.actual[c]||0;}),backgroundColor:cats.map(function(c){return(budTotals.actual[c]||0)>budTotals.limitByCat[c]?'#ff6b6b':'#3ddc97';}),borderRadius:4}
+      ]},
+      options:baseChartOptions(false)
+    });
+    totEl.innerHTML=budgetTotalsHTML(budTotals);
+  }
 }
 
 function renderTransactions(){
   var m=document.getElementById('tx-month').value;
   var txs=txForMonth(m).slice().sort(function(a,b){return b.date.localeCompare(a.date);});
   var el=document.getElementById('tx-list-el');
-  if(!txs.length){el.innerHTML='<div class="empty">No transactions this month</div>';return;}
-  el.innerHTML=txs.map(function(t){return'<li class="tx-item"><span class="tx-dot '+t.type+'"></span><span class="tx-cat">'+t.category+'</span><span class="tx-desc" title="'+t.description+'">'+t.description+(t.imported?'<span class="tag-imported">imported</span>':'')+'</span><span class="tx-date">'+t.date+'</span><span class="tx-amount '+t.type+'">'+(t.type==='income'?'+':'-')+fmt(t.amount)+'</span><button class="btn btn-ghost btn-sm" onclick="deleteTx(\''+t.id+'\')">&#x2715;</button></li>';}).join('');
+  if(!txs.length){el.innerHTML='<div class="empty">No transactions this month</div>';}
+  else{el.innerHTML=txs.map(function(t){return'<li class="tx-item"><span class="tx-dot '+t.type+'"></span><span class="tx-cat">'+t.category+'</span><span class="tx-desc" title="'+t.description+'">'+t.description+(t.imported?'<span class="tag-imported">imported</span>':'')+'</span><span class="tx-date">'+t.date+'</span><span class="tx-amount '+t.type+'">'+(t.type==='income'?'+':'-')+fmt(t.amount)+'</span><button class="btn btn-ghost btn-sm" onclick="deleteTx(\''+t.id+'\')">&#x2715;</button></li>';}).join('');}
+
+  var totEl=document.getElementById('tx-budget-totals');
+  var budTotals=getBudgetTotalsForMonth(m);
+  if(!S.budgets.length){totEl.style.display='none';}
+  else{totEl.style.display='block';totEl.innerHTML='<div class="section-title" style="margin-bottom:0.75rem">Budget total for this month</div>'+budgetTotalsHTML(budTotals);}
 }
 
 function renderBudget(){
   var m=document.getElementById('bud-month').value;
   var actual={};txForMonth(m).filter(function(t){return t.type==='expense';}).forEach(function(t){actual[t.category]=(actual[t.category]||0)+t.amount;});
   var el=document.getElementById('budget-bars');
-  if(!S.budgets.length){el.innerHTML='<div class="empty">No budget limits set yet</div>';return;}
-  el.innerHTML=S.budgets.map(function(b){
-    var lim=b.limit;var sp=actual[b.category]||0;var p=Math.min(Math.round(sp/lim*100),100);
-    var over=sp>lim;var col=over?'var(--red)':p>75?'var(--amber)':'var(--green)';
-    return'<div class="budget-item"><div class="budget-row"><span>'+b.category+'</span><div style="display:flex;gap:10px;align-items:center"><button class="btn btn-ghost btn-sm" onclick="deleteBudget(\''+b.id+'\')">Remove</button><span style="font-weight:500;color:'+col+'">'+fmt(sp)+' / '+fmt(lim)+'</span></div></div><div class="bar-bg"><div class="bar-fill" style="width:'+p+'%;background:'+col+'"></div></div><div class="bar-sub">'+(over?'Over budget by '+fmt(sp-lim):fmt(lim-sp)+' remaining')+'</div></div>';
-  }).join('');
+  if(!S.budgets.length){el.innerHTML='<div class="empty">No budget limits set yet</div>';}
+  else{
+    el.innerHTML=S.budgets.map(function(b){
+      var lim=b.limit;var sp=actual[b.category]||0;var p=Math.min(Math.round(sp/lim*100),100);
+      var over=sp>lim;var col=over?'var(--red)':p>75?'var(--amber)':'var(--green)';
+      return'<div class="budget-item"><div class="budget-row"><span>'+b.category+'</span><div style="display:flex;gap:10px;align-items:center"><button class="btn btn-ghost btn-sm" onclick="deleteBudget(\''+b.id+'\')">Remove</button><span style="font-weight:500;color:'+col+'">'+fmt(sp)+' / '+fmt(lim)+'</span></div></div><div class="bar-bg"><div class="bar-fill" style="width:'+p+'%;background:'+col+'"></div></div><div class="bar-sub">'+(over?'Over budget by '+fmt(sp-lim):fmt(lim-sp)+' remaining')+'</div></div>';
+    }).join('');
+  }
+  var totEl=document.getElementById('budget-totals');
+  if(!S.budgets.length){totEl.style.display='none';}
+  else{totEl.style.display='block';totEl.innerHTML=budgetTotalsHTML(getBudgetTotalsForMonth(m));}
 }
 
 function renderGoals(){
