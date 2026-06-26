@@ -179,6 +179,17 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 .fade-in{animation:fadeIn 0.3s ease forwards}
 
+/* ── RECEIPTS ── */
+.receipt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.receipt-card{background:var(--bg3);border:0.5px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;display:flex;flex-direction:column}
+.receipt-thumb{width:100%;aspect-ratio:3/4;object-fit:cover;cursor:pointer;background:var(--bg4);display:block}
+.receipt-info{padding:8px}
+.receipt-date{font-size:11px;color:var(--text3);margin-bottom:6px}
+.receipt-actions{display:flex;justify-content:flex-end;padding:0 8px 8px}
+#receipt-lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:3000;align-items:center;justify-content:center;padding:24px}
+#receipt-lightbox img{max-width:100%;max-height:90vh;border-radius:8px;display:block}
+.lightbox-close{position:absolute;top:18px;right:24px;color:#fff;font-size:26px;cursor:pointer;background:none;border:none;line-height:1;padding:6px}
+
 /* ── GOAL / INVESTMENT ACTION ROWS ── */
 .goal-actions{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
 .inv-actions{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center}
@@ -264,21 +275,11 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
     <button class="nav-btn" data-tab="investments" onclick="switchTab('investments',this)">Investments</button>
     <button class="nav-btn" data-tab="trends" onclick="switchTab('trends',this)">Trends</button>
     <button class="nav-btn" data-tab="import" onclick="switchTab('import',this)">Import statement</button>
+    <button class="nav-btn" data-tab="receipts" onclick="switchTab('receipts',this)">Receipts</button>
     <button class="nav-btn" data-tab="backup" onclick="switchTab('backup',this)">Export &amp; backup</button>
   </div>
 
   <div class="content">
-
-    <div class="section" id="quick-add-section">
-      <div class="section-title" style="margin-bottom:1rem">Quick add (smart text)</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:10px">Type a sentence and I'll try to fill in the details &mdash; works for transactions, budgets, goals and investments. You'll always get a chance to check it before anything is added.</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input class="field" type="text" id="qa-input" placeholder='e.g. "Spent R450 on groceries today"' style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')runQuickAdd()">
-        <button class="btn btn-accent" onclick="runQuickAdd()">Parse</button>
-      </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:8px">Try: "R450 groceries today" &middot; "Set housing budget to R5500" &middot; "New goal Cape Town holiday target R10000" &middot; "Contribute R1000 to Sygnia unit trust" &middot; "Update Bitcoin value to R8500"</div>
-      <div id="qa-preview" style="display:none;margin-top:14px"></div>
-    </div>
 
     <!-- OVERVIEW -->
     <div class="tab active" id="tab-overview">
@@ -444,6 +445,24 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
       </div>
     </div>
 
+    <!-- RECEIPTS -->
+    <div class="tab" id="tab-receipts">
+      <div class="section">
+        <div class="section-title" style="margin-bottom:1rem">Upload a slip</div>
+        <div class="drop-zone" id="receipt-drop-zone" onclick="document.getElementById('receipt-file-input').click()" ondragover="onReceiptDragOver(event)" ondragleave="onReceiptDragLeave()" ondrop="onReceiptDrop(event)">
+          <div class="drop-icon">&#x1F9FE;</div>
+          <div class="drop-title">Click to upload or drag &amp; drop</div>
+          <div class="drop-sub">Take a photo or pick one from your gallery &mdash; you can select more than one at a time</div>
+        </div>
+        <input type="file" id="receipt-file-input" accept="image/*" multiple capture="environment" style="display:none" onchange="onReceiptFilesSelected(event)">
+        <div style="font-size:12px;color:var(--text3);margin-top:8px">Photos are resized and compressed automatically to save space, and stay on this device only. They're <b>not</b> included in your JSON/CSV backups yet &mdash; keep that in mind if you ever move to a new device.</div>
+      </div>
+      <div class="section">
+        <div class="section-title" style="margin-bottom:1rem">Your slips</div>
+        <div class="receipt-grid" id="receipt-grid"><div class="empty">No slips uploaded yet</div></div>
+      </div>
+    </div>
+
     <!-- BACKUP / EXPORT -->
     <div class="tab" id="tab-backup">
       <div class="section">
@@ -470,6 +489,12 @@ header{background:var(--bg2);border-bottom:0.5px solid var(--border);padding:0 2
 
   </div><!-- /content -->
 </div><!-- /app -->
+
+<!-- RECEIPT LIGHTBOX -->
+<div id="receipt-lightbox" onclick="if(event.target===this)closeReceiptLightbox()">
+  <button class="lightbox-close" onclick="closeReceiptLightbox()">&#x2715;</button>
+  <img id="receipt-lightbox-img" src="" alt="Receipt full view">
+</div>
 
 <!-- CHANGE PASSWORD MODAL -->
 <div id="pw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:2000;align-items:center;justify-content:center">
@@ -520,6 +545,7 @@ function loadData(){
   if(!S.goals)S.goals=[];
   if(!S.investments)S.investments=[];
   if(!S.customCategories)S.customCategories=[];
+  if(!S.receipts)S.receipts=[];
   S.budgets=migrateBudgets(S.budgets);
 }
 function saveData(){try{localStorage.setItem(STORE_KEY,JSON.stringify(S));}catch(e){}}
@@ -641,248 +667,7 @@ function updateHeaderMonth(){
   var now=new Date();document.getElementById('header-month').textContent=now.toLocaleString('en-ZA',{month:'long',year:'numeric'});
 }
 
-// ══ QUICK ADD (rule-based text parser — no AI, fully offline) ══
-var qaParsed=null;
-
-function extractDateAndStrip(text){
-  var date=todayStr();var stripped=text;var lower=text.toLowerCase();
-  if(lower.indexOf('yesterday')!==-1){
-    var d=new Date();d.setDate(d.getDate()-1);date=d.toISOString().split('T')[0];
-    stripped=stripped.replace(/yesterday/i,'');
-  }else if(lower.indexOf('today')!==-1){
-    stripped=stripped.replace(/today/i,'');
-  }else{
-    var m=text.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
-    if(m){date=m[1]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[3]).padStart(2,'0');stripped=stripped.replace(m[0],'');}
-    else{
-      m=text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-      if(m){date=m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');stripped=stripped.replace(m[0],'');}
-      else{
-        m=text.match(/(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s*(\d{4})?/i);
-        if(m){
-          var months={jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
-          var yr=m[3]||String(new Date().getFullYear());
-          date=yr+'-'+months[m[2].toLowerCase().substring(0,3)]+'-'+String(m[1]).padStart(2,'0');
-          stripped=stripped.replace(m[0],'');
-        }
-      }
-    }
-  }
-  return {date:date,stripped:stripped};
-}
-function extractAmount(text){
-  var m=text.match(/R\s?\d[\d,. ]*\d|R\s?\d+|\d[\d,. ]*\d|\d+(?:\.\d+)?/);
-  if(!m)return null;
-  var val=parseAmount(m[0]);
-  return val>0?val:null;
-}
-function matchCategory(text){
-  var lower=text.toLowerCase();
-  var all=BASE_TX_CATS.concat(S.customCategories||[]).slice().sort(function(a,b){return b.length-a.length;});
-  for(var i=0;i<all.length;i++){if(lower.indexOf(all[i].toLowerCase())!==-1)return all[i];}
-  return null;
-}
-function matchGoalByText(text){
-  var lower=text.toLowerCase();
-  for(var i=0;i<S.goals.length;i++){if(S.goals[i].name&&lower.indexOf(S.goals[i].name.toLowerCase())!==-1)return S.goals[i];}
-  return null;
-}
-function matchInvestmentByText(text){
-  var lower=text.toLowerCase();
-  for(var i=0;i<S.investments.length;i++){if(S.investments[i].name&&lower.indexOf(S.investments[i].name.toLowerCase())!==-1)return S.investments[i];}
-  return null;
-}
 function escapeAttr(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
-
-function parseQuickAdd(raw){
-  var text=(raw||'').trim();
-  if(!text)return null;
-  var dateInfo=extractDateAndStrip(text);
-  var working=dateInfo.stripped;
-  var lower=working.toLowerCase();
-  var amount=extractAmount(working);
-  var amtMatch=working.match(/R\s?\d[\d,. ]*\d|R\s?\d+|\d[\d,. ]*\d|\d+(?:\.\d+)?/);
-  var nameSource=amtMatch?working.replace(amtMatch[0],''):working;
-
-  // existing investment mentioned -> contribution or value update
-  var inv=matchInvestmentByText(working);
-  if(inv){
-    var isValueUpdate=/worth|value|now at|currently|valued/.test(lower);
-    return {kind:'investment',mode:isValueUpdate?'value':'contribution',investmentId:inv.id,investmentName:inv.name,amount:amount,date:dateInfo.date};
-  }
-  // new investment
-  if(/new investment|add investment|create investment|open investment/.test(lower)){
-    var typeGuess='Cash/Other';
-    if(/crypto|bitcoin|ethereum/.test(lower))typeGuess='Crypto';
-    else if(/unit trust/.test(lower))typeGuess='Unit Trust';
-    else if(/retirement annuity|\bra\b/.test(lower))typeGuess='Retirement Annuity';
-    else if(/etf|stock|share/.test(lower))typeGuess='Stocks/ETF';
-    var nm=nameSource.replace(/new investment|add investment|create investment|open investment/i,'').replace(/type\s+\w+.*/i,'').trim();
-    return {kind:'investment',mode:'new',name:nm||'New holding',type:typeGuess,amount:amount,date:dateInfo.date};
-  }
-  // existing goal mentioned -> contribution
-  var goal=matchGoalByText(working);
-  if(goal&&amount){
-    return {kind:'goal',mode:'contribution',goalId:goal.id,goalName:goal.name,amount:amount};
-  }
-  // new goal
-  if(/new goal|create goal|add goal|savings goal/.test(lower)){
-    var gn=nameSource.replace(/new goal|create goal|add goal|savings goal|target|goal/gi,'').trim();
-    return {kind:'goal',mode:'new',name:gn||'New goal',target:amount};
-  }
-  // budget
-  if(/budget|monthly limit|spending limit/.test(lower)){
-    var cat=matchCategory(working);
-    return {kind:'budget',category:cat,limit:amount};
-  }
-  // default: transaction
-  var incomeRegex=/salary|income|received|deposit|refund|earned|bonus|got paid|payment received/;
-  var type=incomeRegex.test(lower)?'income':'expense';
-  var category=type==='income'?'Income':(matchCategory(working)||'Other');
-  return {kind:'transaction',type:type,category:category,amount:amount,date:dateInfo.date,description:text};
-}
-
-function runQuickAdd(){
-  var raw=document.getElementById('qa-input').value;
-  var parsed=parseQuickAdd(raw);
-  if(!parsed)return;
-  qaParsed=parsed;
-  renderQuickAddPreview(parsed);
-}
-function cancelQuickAdd(){
-  var el=document.getElementById('qa-preview');
-  el.style.display='none';el.innerHTML='';
-  qaParsed=null;
-}
-function renderQuickAddPreview(parsed){
-  var el=document.getElementById('qa-preview');
-  var html='<div class="status-msg status-info" style="margin-bottom:10px">Here\u2019s what I understood &mdash; check and adjust before adding.</div>';
-  if(parsed.kind==='transaction'){
-    html+='<div class="form-row fr-3">'
-      +'<select class="field" id="qa-f-type"><option value="expense"'+(parsed.type==='expense'?' selected':'')+'>Expense</option><option value="income"'+(parsed.type==='income'?' selected':'')+'>Income</option></select>'
-      +'<input class="field" type="number" id="qa-f-amount" placeholder="Amount (R)" value="'+(parsed.amount||'')+'">'
-      +'<input class="field" type="date" id="qa-f-date" value="'+parsed.date+'">'
-    +'</div>'
-    +'<div class="form-row fr-2" style="margin-top:8px">'
-      +'<select class="field" id="qa-f-cat">'+buildCatOptions(BASE_TX_CATS,'')+'</select>'
-      +'<input class="field" type="text" id="qa-f-desc" placeholder="Description" value="'+escapeAttr(parsed.description)+'">'
-    +'</div>'
-    +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Add transaction</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
-    el.style.display='block';el.innerHTML=html;
-    if(parsed.category)document.getElementById('qa-f-cat').value=parsed.category;
-  }else if(parsed.kind==='budget'){
-    html+='<div class="form-row fr-2">'
-      +'<select class="field" id="qa-f-bcat">'+buildCatOptions(BASE_BUD_CATS,'Category')+'</select>'
-      +'<input class="field" type="number" id="qa-f-blimit" placeholder="Monthly limit (R)" value="'+(parsed.limit||'')+'">'
-    +'</div>'
-    +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Set budget limit</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
-    el.style.display='block';el.innerHTML=html;
-    if(parsed.category)document.getElementById('qa-f-bcat').value=parsed.category;
-  }else if(parsed.kind==='goal'){
-    if(parsed.mode==='contribution'){
-      html+='<div style="font-size:14px;margin-bottom:8px">Add savings to goal: <b>'+escapeAttr(parsed.goalName)+'</b></div>'
-        +'<div class="form-row fr-2"><input class="field" type="number" id="qa-f-gamount" placeholder="Amount (R)" value="'+(parsed.amount||'')+'"><span></span></div>'
-        +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Add savings</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
-    }else{
-      html+='<div class="form-row fr-2">'
-        +'<input class="field" type="text" id="qa-f-gname" placeholder="Goal name" value="'+escapeAttr(parsed.name)+'">'
-        +'<input class="field" type="number" id="qa-f-gtarget" placeholder="Target amount (R)" value="'+(parsed.target||'')+'">'
-      +'</div>'
-      +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Create goal</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
-    }
-    el.style.display='block';el.innerHTML=html;
-  }else if(parsed.kind==='investment'){
-    if(parsed.mode==='new'){
-      html+='<div class="form-row fr-3">'
-        +'<input class="field" type="text" id="qa-f-iname" placeholder="Holding name" value="'+escapeAttr(parsed.name)+'">'
-        +'<select class="field" id="qa-f-itype"><option>Unit Trust</option><option>Retirement Annuity</option><option>Crypto</option><option>Stocks/ETF</option><option>Cash/Other</option></select>'
-        +'<input class="field" type="number" id="qa-f-iamount" placeholder="Starting amount (R, optional)" value="'+(parsed.amount||'')+'">'
-      +'</div>'
-      +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">Create holding</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
-      el.style.display='block';el.innerHTML=html;
-      document.getElementById('qa-f-itype').value=parsed.type||'Cash/Other';
-    }else{
-      var label=parsed.mode==='value'?'Update current value of':'Add contribution to';
-      html+='<div style="font-size:14px;margin-bottom:8px">'+label+': <b>'+escapeAttr(parsed.investmentName)+'</b></div>'
-        +'<div class="form-row fr-2">'
-          +'<input class="field" type="number" id="qa-f-ivamount" placeholder="'+(parsed.mode==='value'?'New current value (R)':'Contribution amount (R)')+'" value="'+(parsed.amount||'')+'">'
-          +'<input class="field" type="date" id="qa-f-ivdate" value="'+(parsed.date||todayStr())+'">'
-        +'</div>'
-        +'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-accent" onclick="confirmQuickAdd()">'+(parsed.mode==='value'?'Update value':'Log contribution')+'</button><button class="btn" onclick="cancelQuickAdd()">Cancel</button></div>';
-      el.style.display='block';el.innerHTML=html;
-    }
-  }
-}
-function confirmQuickAdd(){
-  if(!qaParsed)return;
-  var k=qaParsed.kind;
-  if(k==='transaction'){
-    var type=document.getElementById('qa-f-type').value;
-    var amount=parseFloat(document.getElementById('qa-f-amount').value);
-    var cat=document.getElementById('qa-f-cat').value;
-    var date=document.getElementById('qa-f-date').value;
-    var desc=document.getElementById('qa-f-desc').value.trim()||'Quick add';
-    if(!amount||amount<=0||!date){alert('Please check the amount and date.');return;}
-    if(type==='income')cat='Income';
-    S.transactions.push({id:Date.now().toString(),description:desc,amount:amount,category:cat,date:date,type:type});
-    saveData();finishQuickAdd('Transaction added.');
-  }else if(k==='budget'){
-    var bcat=document.getElementById('qa-f-bcat').value;
-    var blimit=parseFloat(document.getElementById('qa-f-blimit').value);
-    if(!bcat||!blimit||blimit<=0){alert('Please check the category and limit.');return;}
-    S.budgets.push({id:'b'+Date.now()+Math.random(),category:bcat,limit:blimit});
-    saveData();finishQuickAdd('Budget limit set.');
-  }else if(k==='goal'){
-    if(qaParsed.mode==='contribution'){
-      var gamount=parseFloat(document.getElementById('qa-f-gamount').value);
-      if(!gamount||gamount<=0){alert('Please enter a valid amount.');return;}
-      S.goals.forEach(function(g){if(g.id===qaParsed.goalId)g.saved=Math.min(g.saved+gamount,g.target);});
-      saveData();finishQuickAdd('Added to goal.');
-    }else{
-      var gname=document.getElementById('qa-f-gname').value.trim();
-      var gtarget=parseFloat(document.getElementById('qa-f-gtarget').value);
-      if(!gname||!gtarget||gtarget<=0){alert('Please enter a goal name and target.');return;}
-      S.goals.push({id:Date.now().toString(),name:gname,target:gtarget,saved:0});
-      saveData();finishQuickAdd('Goal created.');
-    }
-  }else if(k==='investment'){
-    if(qaParsed.mode==='new'){
-      var iname=document.getElementById('qa-f-iname').value.trim();
-      var itype=document.getElementById('qa-f-itype').value;
-      var iamount=parseFloat(document.getElementById('qa-f-iamount').value)||0;
-      if(!iname){alert('Please enter a holding name.');return;}
-      var newInv={id:Date.now().toString(),name:iname,type:itype,totalInvested:0,currentValue:0,history:[]};
-      if(iamount>0){newInv.totalInvested=iamount;newInv.currentValue=iamount;newInv.history.push({date:todayStr(),value:iamount});}
-      S.investments.push(newInv);
-      saveData();finishQuickAdd('Investment holding created.');
-    }else{
-      var ivamount=parseFloat(document.getElementById('qa-f-ivamount').value);
-      var ivdate=document.getElementById('qa-f-ivdate').value;
-      if(isNaN(ivamount)||!ivdate){alert('Please check the amount and date.');return;}
-      S.investments.forEach(function(inv){
-        if(inv.id===qaParsed.investmentId){
-          if(qaParsed.mode==='value'){inv.currentValue=ivamount;}
-          else{inv.totalInvested+=ivamount;inv.currentValue+=ivamount;}
-          inv.history.push({date:ivdate,value:inv.currentValue});
-          inv.history.sort(function(a,b){return a.date.localeCompare(b.date);});
-        }
-      });
-      saveData();finishQuickAdd(qaParsed.mode==='value'?'Investment value updated.':'Contribution logged.');
-    }
-  }
-}
-function finishQuickAdd(msg){
-  document.getElementById('qa-input').value='';
-  cancelQuickAdd();
-  renderAll();
-  var box=document.getElementById('quick-add-section');
-  var note=document.createElement('div');
-  note.className='status-msg status-ok';
-  note.style.marginTop='10px';
-  note.textContent=msg;
-  box.appendChild(note);
-  setTimeout(function(){if(note.parentNode)note.parentNode.removeChild(note);},3500);
-}
 
 // ── THEMES (random on each login) ──
 var THEMES=[
@@ -1302,6 +1087,7 @@ function switchTab(name,btn){
   if(name==='goals')renderGoals();
   if(name==='investments')renderInvestments();
   if(name==='trends')renderTrends();
+  if(name==='receipts')renderReceipts();
 }
 
 // ── IMPORT (bank statements) ──
@@ -1402,6 +1188,138 @@ function onDragOver(e){e.preventDefault();document.getElementById('drop-zone').c
 function onDragLeave(){document.getElementById('drop-zone').classList.remove('drag-over');}
 function onDrop(e){e.preventDefault();document.getElementById('drop-zone').classList.remove('drag-over');var file=e.dataTransfer.files[0];if(!file)return;document.getElementById('drop-sub').textContent='Reading: '+file.name+'...';var reader=new FileReader();reader.onload=function(ev){processFile(ev.target.result);document.getElementById('drop-sub').textContent='Loaded: '+file.name;};reader.readAsText(file);}
 
+// ══ RECEIPTS / SLIPS (photos stored in IndexedDB, metadata in localStorage) ══
+var receiptsDB=null;
+function openReceiptsDB(){
+  return new Promise(function(resolve,reject){
+    if(receiptsDB){resolve(receiptsDB);return;}
+    if(!window.indexedDB){reject(new Error('IndexedDB not supported'));return;}
+    var req=indexedDB.open('finanse_receipts_db',1);
+    req.onupgradeneeded=function(e){
+      var db=e.target.result;
+      if(!db.objectStoreNames.contains('receipts'))db.createObjectStore('receipts');
+    };
+    req.onsuccess=function(e){receiptsDB=e.target.result;resolve(receiptsDB);};
+    req.onerror=function(e){reject(e);};
+  });
+}
+function saveReceiptImage(id,dataUrl){
+  return openReceiptsDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('receipts','readwrite');
+      tx.objectStore('receipts').put(dataUrl,id);
+      tx.oncomplete=function(){resolve();};
+      tx.onerror=function(e){reject(e);};
+    });
+  });
+}
+function getReceiptImage(id){
+  return openReceiptsDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('receipts','readonly');
+      var req=tx.objectStore('receipts').get(id);
+      req.onsuccess=function(){resolve(req.result);};
+      req.onerror=function(e){reject(e);};
+    });
+  });
+}
+function deleteReceiptImage(id){
+  return openReceiptsDB().then(function(db){
+    return new Promise(function(resolve,reject){
+      var tx=db.transaction('receipts','readwrite');
+      tx.objectStore('receipts').delete(id);
+      tx.oncomplete=function(){resolve();};
+      tx.onerror=function(e){reject(e);};
+    });
+  });
+}
+function resizeImageFile(file){
+  return new Promise(function(resolve,reject){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var maxDim=1400,w=img.width,h=img.height;
+        if(w>h&&w>maxDim){h=Math.round(h*maxDim/w);w=maxDim;}
+        else if(h>=w&&h>maxDim){w=Math.round(w*maxDim/h);h=maxDim;}
+        var canvas=document.createElement('canvas');
+        canvas.width=w;canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg',0.72));
+      };
+      img.onerror=function(){reject(new Error('Could not read image'));};
+      img.src=e.target.result;
+    };
+    reader.onerror=function(){reject(new Error('Could not read file'));};
+    reader.readAsDataURL(file);
+  });
+}
+function handleReceiptFiles(fileList){
+  var files=Array.prototype.slice.call(fileList||[]).filter(function(f){return f.type&&f.type.indexOf('image/')===0;});
+  if(!files.length)return;
+  var remaining=files.length;
+  files.forEach(function(file){
+    resizeImageFile(file).then(function(dataUrl){
+      var id='r'+Date.now().toString()+Math.random().toString(36).slice(2);
+      return saveReceiptImage(id,dataUrl).then(function(){
+        if(!S.receipts)S.receipts=[];
+        S.receipts.unshift({id:id,date:todayStr(),note:''});
+        saveData();
+      });
+    }).catch(function(err){console.error('Could not save this slip',err);})
+      .then(function(){remaining--;if(remaining===0)renderReceipts();});
+  });
+}
+function onReceiptFilesSelected(e){handleReceiptFiles(e.target.files);e.target.value='';}
+function onReceiptDragOver(e){e.preventDefault();document.getElementById('receipt-drop-zone').classList.add('drag-over');}
+function onReceiptDragLeave(){document.getElementById('receipt-drop-zone').classList.remove('drag-over');}
+function onReceiptDrop(e){e.preventDefault();document.getElementById('receipt-drop-zone').classList.remove('drag-over');handleReceiptFiles(e.dataTransfer.files);}
+function renderReceipts(){
+  var el=document.getElementById('receipt-grid');
+  if(!S.receipts||!S.receipts.length){el.innerHTML='<div class="empty">No slips uploaded yet</div>';return;}
+  var sorted=S.receipts.slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+  el.innerHTML=sorted.map(function(r){
+    return '<div class="receipt-card">'
+      +'<img class="receipt-thumb" id="receipt-img-'+r.id+'" onclick="openReceiptLightbox(\''+r.id+'\')" alt="Receipt">'
+      +'<div class="receipt-info">'
+        +'<div class="receipt-date">'+r.date+'</div>'
+        +'<input class="field" type="text" placeholder="Note (e.g. Pick n Pay)" value="'+escapeAttr(r.note||'')+'" style="font-size:12px;padding:5px 8px" onchange="updateReceiptNote(\''+r.id+'\',this.value)">'
+      +'</div>'
+      +'<div class="receipt-actions"><button class="btn btn-ghost btn-sm" onclick="deleteReceipt(\''+r.id+'\')">&#x2715; Remove</button></div>'
+    +'</div>';
+  }).join('');
+  sorted.forEach(function(r){
+    getReceiptImage(r.id).then(function(dataUrl){
+      var imgEl=document.getElementById('receipt-img-'+r.id);
+      if(!imgEl)return;
+      if(dataUrl){imgEl.src=dataUrl;}
+      else{imgEl.alt='Photo not found on this device';imgEl.style.opacity='0.35';}
+    }).catch(function(){});
+  });
+}
+function updateReceiptNote(id,val){
+  (S.receipts||[]).forEach(function(r){if(r.id===id)r.note=val;});
+  saveData();
+}
+function deleteReceipt(id){
+  if(!confirm('Remove this slip? This cannot be undone.'))return;
+  S.receipts=(S.receipts||[]).filter(function(r){return r.id!==id;});
+  saveData();
+  deleteReceiptImage(id).catch(function(){});
+  renderReceipts();
+}
+function openReceiptLightbox(id){
+  getReceiptImage(id).then(function(dataUrl){
+    if(!dataUrl)return;
+    document.getElementById('receipt-lightbox-img').src=dataUrl;
+    document.getElementById('receipt-lightbox').style.display='flex';
+  });
+}
+function closeReceiptLightbox(){
+  document.getElementById('receipt-lightbox').style.display='none';
+  document.getElementById('receipt-lightbox-img').src='';
+}
+
 // ── EXPORT (CSV) ──
 function csvEscape(v){
   v=(v===undefined||v===null)?'':String(v);
@@ -1468,7 +1386,8 @@ function onBackupFileSelect(e){
         budgets:migrateBudgets(parsed.budgets),
         goals:parsed.goals||[],
         investments:parsed.investments||[],
-        customCategories:parsed.customCategories||[]
+        customCategories:parsed.customCategories||[],
+        receipts:parsed.receipts||[]
       };
       saveData();renderAll();
       showBackupStatus('ok','Backup restored successfully.');
